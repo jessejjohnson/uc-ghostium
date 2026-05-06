@@ -1,0 +1,62 @@
+name: nightly-build
+on:
+  schedule:
+    - cron: "0 10 * * *"  # 02:00 PT / 03:00 DST
+  workflow_dispatch: {}
+
+jobs:
+  build-and-test:
+    runs-on: [self-hosted, linux, ghostium-builder]
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: gclient sync
+        run: |
+          cd "$CHROMIUM_SRC"
+          gclient sync -D --force
+
+      - name: UC prune + domain substitution
+        run: |
+          python3 third_party/ungoogled-chromium/utils/prune_binaries.py \
+            "$CHROMIUM_SRC" \
+            third_party/ungoogled-chromium/pruning.list
+          python3 third_party/ungoogled-chromium/utils/domain_substitution.py \
+            apply \
+            -r third_party/ungoogled-chromium/domain_regex.list \
+            -f third_party/ungoogled-chromium/domain_substitution.list \
+            -c third_party/ungoogled-chromium/domsubcache.tar.gz \
+            "$CHROMIUM_SRC"
+
+      - name: Sync overlay + apply patches
+        run: |
+          python3 build/sync_overlay.py
+          python3 build/apply_patches.py
+
+      - name: GN gen
+        run: |
+          cd "$CHROMIUM_SRC"
+          gn gen out/Default --args="$(cat "$GITHUB_WORKSPACE/config/gn_args.gn")"
+
+      - name: Build overlay unit tests
+        run: |
+          cd "$CHROMIUM_SRC"
+          autoninja -C out/Default ghostium_overlay_tests
+
+      - name: Run unit tests
+        env:
+          GN_OUT: ${{ env.CHROMIUM_SRC }}/out/Default
+        run: bash build/run_unit_tests.sh
+
+      - name: Build full chrome (smoke)
+        run: |
+          cd "$CHROMIUM_SRC"
+          autoninja -C out/Default chrome
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: ${{ env.CHROMIUM_SRC }}/out/Default/*.log

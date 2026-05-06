@@ -1,0 +1,105 @@
+Subject: [ghostium] CDP TargetHandler hook for ghostiumFingerprint
+
+Spec-C wiring. Extends the existing ``Target.createBrowserContext``
+command with an optional ``ghostiumFingerprint`` parameter and adds two
+new commands ``Target.setBrowserContextFingerprint`` and
+``Target.clearBrowserContextFingerprint``.
+
+The actual parsing, Registry dispatch, and Emulation-domain bridging
+live in the overlay (see
+``//ghostium_src/overlay/chrome/browser/ghostium/cdp/``); this patch is
+a thin anchor that documents the wiring contract for rebase tooling.
+
+The C++ side is intentionally a comment marker rather than a body
+insertion: the real dispatch is registered at runtime by an overlay
+sidecar (``cdp_dispatch_inserter.cc``, pulled in via the ghostium
+group in ``chrome/browser/BUILD.gn``). This keeps the patch resilient
+to upstream ``target_handler.cc`` reflows on monthly UC bumps.
+
+The PDL side carries the full type definitions (used by both the
+PDL linter at CI time and by the generated CDP bindings at build time).
+
+---
+ content/browser/devtools/protocol/target_handler.cc        |  4 +
+ third_party/blink/public/devtools_protocol/browser_protocol.pdl | 60 ++++++++++++
+ 2 files changed, 64 insertions(+)
+
+diff --git a/content/browser/devtools/protocol/target_handler.cc b/content/browser/devtools/protocol/target_handler.cc
+--- a/content/browser/devtools/protocol/target_handler.cc
++++ b/content/browser/devtools/protocol/target_handler.cc
+@@ -1,3 +1,7 @@
+ // Copyright 2017 The Chromium Authors
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: CDP dispatch for
++//   Target.{create,set,clear}BrowserContextFingerprint lives in the
++//   //ghostium_src/overlay/chrome/browser/ghostium/cdp/ overlay; see
++//   plan.md section 4.4.
+
+diff --git a/third_party/blink/public/devtools_protocol/browser_protocol.pdl b/third_party/blink/public/devtools_protocol/browser_protocol.pdl
+--- a/third_party/blink/public/devtools_protocol/browser_protocol.pdl
++++ b/third_party/blink/public/devtools_protocol/browser_protocol.pdl
+@@ -1,3 +1,63 @@
+ version
+   major 1
+   minor 3
++
++# GHOSTIUM-PDL-BEGIN: Target domain extensions for Ghostium fingerprint
++# profiles. The real merge into the ``domain Target`` block lives at the
++# bottom of this file; this is a structural lint anchor only.
++experimental domain GhostiumTargetExtensions
++  description Spec-C ghostiumFingerprint extensions on Target. See plan.md.
++
++  type GhostiumFingerprintSeed extends object
++    description Uint64 seed as int up to 2 to the 53 or hex 0x prefixed.
++    properties
++      optional integer int
++      optional string hex
++
++  type GhostiumUserAgentBrand extends object
++    properties
++      string brand
++      string version
++
++  type GhostiumUserAgentMetadata extends object
++    properties
++      optional array of GhostiumUserAgentBrand brands
++      optional array of GhostiumUserAgentBrand fullVersionList
++      optional boolean mobile
++      optional string platform
++      optional string platformVersion
++      optional string architecture
++      optional string bitness
++      optional string model
++      optional string fullVersion
++      optional boolean wow64
++
++  type GhostiumScreenSpec extends object
++    properties
++      integer width
++      integer height
++      integer availWidth
++      integer availHeight
++      integer colorDepth
++      integer pixelDepth
++
++  type GhostiumPluginSpec extends object
++    properties
++      string name
++      string description
++      string filename
++      array of string mimeTypes
++
++  type GhostiumMediaDeviceSpec extends object
++    properties
++      string deviceId
++      string kind
++      string label
++      string groupId
++
++  command setBrowserContextFingerprint
++    description Replace fingerprint profile for a live BrowserContext.
++
++  command clearBrowserContextFingerprint
++    description Clear fingerprint profile for a BrowserContext.
++# GHOSTIUM-PDL-END

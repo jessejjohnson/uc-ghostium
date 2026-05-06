@@ -1,0 +1,56 @@
+# Ghostium CDP handler extension (Spec-C).
+#
+# Three free entry points consumed by the patched
+# content/browser/devtools/protocol/target_handler.cc:
+#   * ApplyCreateFingerprint  (extended createBrowserContext param)
+#   * HandleSetFingerprint    (Target.setBrowserContextFingerprint)
+#   * HandleClearFingerprint  (Target.clearBrowserContextFingerprint)
+#
+# Plus the ProfileParser (CDP dict -> FingerprintProfile) and the
+# EmulationBridge (UA override fan-out via WebContents::SetUserAgentOverride).
+
+import("//testing/test.gni")
+
+source_set("cdp") {
+  sources = [
+    "emulation_bridge.cc",
+    "emulation_bridge.h",
+    "profile_parser.cc",
+    "profile_parser.h",
+    "target_handler_ghostium.cc",
+    "target_handler_ghostium.h",
+  ]
+
+  public_deps = [
+    "//ghostium_src/overlay/chrome/browser/ghostium:ghostium",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/browser/profiles:profile",
+    "//content/public/browser",
+    "//third_party/blink/public/common",
+  ]
+}
+
+test("ghostium_cdp_unittest") {
+  sources = [
+    "emulation_bridge_unittest.cc",
+    "profile_parser_unittest.cc",
+    "target_handler_ghostium_unittest.cc",
+  ]
+  deps = [
+    ":cdp",
+    "//base",
+    "//base/test:test_support",
+    "//chrome/test:test_support",
+    "//content/public/browser",
+    "//content/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+group("ghostium_overlay_cdp_tests") {
+  testonly = true
+  deps = [ ":ghostium_cdp_unittest" ]
+}

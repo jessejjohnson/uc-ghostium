@@ -1,0 +1,13 @@
+is_debug = false
+is_component_build = true
+symbol_level = 1
+enable_nacl = false
+use_goma = false
+use_remoteexec = false
+cc_wrapper = "ccache"
+blink_symbol_level = 1
+is_official_build = false
+proprietary_codecs = false
+ffmpeg_branding = "Chromium"
+# UC-inherited:
+chrome_pgo_phase = 0

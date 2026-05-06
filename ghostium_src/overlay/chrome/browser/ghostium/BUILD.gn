@@ -1,0 +1,85 @@
+# Ghostium browser-process overlay: FingerprintProfile + Registry + Delivery.
+#
+# See //ghostium_src/overlay/chrome/browser/ghostium/README.md and plan.md
+# section 1.2 for ownership boundaries.
+
+import("//build/buildflag_header.gni")
+import("//testing/test.gni")
+
+source_set("ghostium") {
+  sources = [
+    "emulation_bridge.cc",
+    "emulation_bridge.h",
+    "fingerprint_profile.cc",
+    "fingerprint_profile.h",
+    "fingerprint_profile_delivery.cc",
+    "fingerprint_profile_delivery.h",
+    "fingerprint_profile_mojom_traits.cc",
+    "fingerprint_profile_mojom_traits.h",
+    "fingerprint_profile_registry.cc",
+    "fingerprint_profile_registry.h",
+    "fingerprint_profile_registry_factory.cc",
+    "fingerprint_profile_registry_factory.h",
+  ]
+
+  public_deps = [
+    "//ghostium_src/overlay/public/mojom/ghostium:fingerprint_profile",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/browser/profiles:profile",
+    "//components/keyed_service/core",
+    "//content/public/browser",
+    "//mojo/public/cpp/bindings",
+    "//third_party/blink/public/common",
+  ]
+}
+
+test("fingerprint_profile_registry_unittest") {
+  sources = [ "fingerprint_profile_registry_unittest.cc" ]
+  deps = [
+    ":ghostium",
+    "//base",
+    "//base/test:test_support",
+    "//chrome/test:test_support",
+    "//content/public/browser",
+    "//content/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+test("fingerprint_profile_delivery_unittest") {
+  sources = [ "fingerprint_profile_delivery_unittest.cc" ]
+  deps = [
+    ":ghostium",
+    "//base",
+    "//base/test:test_support",
+    "//chrome/test:test_support",
+    "//content/public/browser",
+    "//content/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+test("emulation_bridge_unittest") {
+  sources = [ "emulation_bridge_unittest.cc" ]
+  deps = [
+    ":ghostium",
+    "//base",
+    "//base/test:test_support",
+    "//chrome/test:test_support",
+    "//content/public/browser",
+    "//content/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+group("ghostium_overlay_browser_tests") {
+  testonly = true
+  deps = [
+    ":emulation_bridge_unittest",
+    ":fingerprint_profile_delivery_unittest",
+    ":fingerprint_profile_registry_unittest",
+  ]
+}

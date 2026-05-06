@@ -1,0 +1,38 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Clangd caches
+.clangd/
+.cache/
+compile_commands.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Chromium build artifacts (safety net; Chromium lives outside the repo,
+# but if a dev ever points CHROMIUM_SRC into the repo they should not be
+# committed).
+out/
+out_*/
+buildtools/
+third_party/llvm-build/
+
+# Patch tooling scratch
+/_scratch/
+*.rej
+*.orig
+
+# Node / markdown tooling
+node_modules/
+package-lock.json

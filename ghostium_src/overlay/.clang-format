@@ -1,0 +1,6 @@
+# Ghostium overlay clang-format. When symlinked into the Chromium source
+# tree, ``$CHROMIUM_SRC/.clang-format`` (Chromium style) takes precedence
+# because clang-format walks upward and the Chromium config sits closer to
+# the source root. This local config is used only by host-side lint.
+BasedOnStyle: Google
+ColumnLimit: 80

@@ -1,0 +1,90 @@
+// Copyright 2026 The Ghostium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module blink.mojom;
+
+struct GhostiumUserAgentBrand {
+  string brand;
+  string version;
+};
+
+struct GhostiumScreenSpec {
+  uint32 width;
+  uint32 height;
+  uint32 avail_width;
+  uint32 avail_height;
+  uint32 color_depth;
+  uint32 pixel_depth;
+};
+
+struct GhostiumPluginSpec {
+  string name;
+  string description;
+  string filename;
+  array<string> mime_types;
+};
+
+struct GhostiumMediaDeviceSpec {
+  string device_id;
+  string kind;
+  string label;
+  string group_id;
+};
+
+enum GhostiumWebRTCPolicy {
+  kDefault,
+  kDefaultPublicInterfaceOnly,
+  kDisableNonProxiedUdp,
+  kDisableBoth,
+};
+
+// Field-for-field mirror of ghostium::FingerprintProfile (see
+// //ghostium_src/overlay/chrome/browser/ghostium/fingerprint_profile.h).
+// All fields are nullable; a null/absent field means "pass through upstream
+// default" in the renderer.
+struct GhostiumFingerprintProfile {
+  string? user_agent;
+  array<GhostiumUserAgentBrand>? ua_brands;
+  array<GhostiumUserAgentBrand>? ua_full_version_list;
+  bool? ua_mobile;
+  string? ua_platform;
+  string? ua_platform_version;
+  string? ua_architecture;
+  string? ua_bitness;
+  string? ua_model;
+  string? ua_full_version;
+  bool? ua_wow64;
+
+  string? platform;
+  uint32? hardware_concurrency;
+  double? device_memory;
+  array<string>? languages;
+
+  bool? webdriver;
+  GhostiumScreenSpec? screen;
+  double? device_pixel_ratio;
+
+  string? timezone;
+  string? primary_language;
+
+  uint64? canvas_seed;
+  uint64? webgl_seed;
+  uint64? audio_seed;
+
+  string? webgl_vendor;
+  string? webgl_renderer;
+
+  array<string>? fonts_whitelist;
+  array<GhostiumPluginSpec>? plugins;
+
+  GhostiumWebRTCPolicy? webrtc_policy;
+  bool? webrtc_mdns_only;
+  array<GhostiumMediaDeviceSpec>? media_devices;
+};
+
+// Browser -> renderer push. Associated with the RenderFrame so that profile
+// updates preserve ordering relative to navigation commits.
+interface FingerprintProfileReceiver {
+  SetProfile(GhostiumFingerprintProfile profile);
+};

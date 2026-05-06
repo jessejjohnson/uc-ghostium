@@ -1,0 +1,15 @@
+# Ghostium Mojo IDL. Mirrors ghostium::FingerprintProfile from
+# //ghostium_src/overlay/chrome/browser/ghostium/fingerprint_profile.h.
+
+import("//mojo/public/tools/bindings/mojom.gni")
+
+mojom("fingerprint_profile") {
+  sources = [ "fingerprint_profile.mojom" ]
+
+  # The IDL is self-contained: every nested struct and enum is defined in
+  # the same file, so no public_deps are required.
+
+  # Generate a Blink-friendly variant so renderer-side code can depend on
+  # ``:fingerprint_profile_blink`` for WTF-string types.
+  generate_java = false
+}

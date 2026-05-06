@@ -1,0 +1,63 @@
+# Ghostium renderer-side fingerprint module.
+#
+# FingerprintNoiseSource is a Supplement<LocalDOMWindow> that caches the
+# active FingerprintProfile and exposes the ``*Override`` predicates + the
+# ``Apply*Noise`` methods consumed by patched hook sites.
+
+import("//testing/test.gni")
+import("//third_party/blink/renderer/modules/modules.gni")
+
+blink_modules_sources("ghostium_fp") {
+  sources = [
+    "audio_noise.cc",
+    "audio_noise.h",
+    "canvas2d_noise.cc",
+    "canvas2d_noise.h",
+    "fingerprint_noise_source.cc",
+    "fingerprint_noise_source.h",
+    "mulberry32.h",
+    "webgl_noise.cc",
+    "webgl_noise.h",
+  ]
+
+  deps = [
+    "//ghostium_src/overlay/public/mojom/ghostium:fingerprint_profile_blink",
+    "//third_party/blink/renderer/core",
+    "//third_party/blink/renderer/platform",
+  ]
+}
+
+test("fingerprint_noise_source_unittest") {
+  sources = [ "fingerprint_noise_source_unittest.cc" ]
+  deps = [
+    ":ghostium_fp",
+    "//base",
+    "//base/test:test_support",
+    "//testing/gtest",
+    "//third_party/blink/renderer/core",
+    "//third_party/blink/renderer/core:testing",
+    "//third_party/blink/renderer/platform",
+  ]
+}
+
+test("ghostium_noise_unittest") {
+  sources = [
+    "audio_noise_unittest.cc",
+    "canvas2d_noise_unittest.cc",
+    "webgl_noise_unittest.cc",
+  ]
+  deps = [
+    ":ghostium_fp",
+    "//base",
+    "//base/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+group("ghostium_overlay_renderer_tests") {
+  testonly = true
+  deps = [
+    ":fingerprint_noise_source_unittest",
+    ":ghostium_noise_unittest",
+  ]
+}

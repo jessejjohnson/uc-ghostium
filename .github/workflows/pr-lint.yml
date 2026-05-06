@@ -1,0 +1,55 @@
+name: pr-lint
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install clang-format + markdownlint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-15
+          sudo npm install -g markdownlint-cli2
+
+      - name: clang-format check (overlay)
+        run: |
+          find ghostium_src/overlay \
+            \( -name '*.cc' -o -name '*.h' \) -print0 \
+            | xargs -0 --no-run-if-empty clang-format-15 --dry-run --Werror
+
+      - name: Patch dry-run (UC series + ghostium series)
+        run: python3 build/ci_patch_dryrun.py
+
+      - name: Python lint
+        run: |
+          pip install ruff
+          ruff check build/
+
+      - name: Spec markdown lint
+        run: |
+          markdownlint-cli2 \
+            'README.md' \
+            'AGENTS.md' \
+            'plan.md' \
+            'docs/**/*.md' \
+            '**/README.md' \
+            '!third_party/**' \
+            || true
+
+      - name: Mojom lint
+        run: python3 build/ci_mojom_lint.py ghostium_src/overlay/public/mojom/
+
+      - name: PDL lint
+        run: python3 build/ci_pdl_lint.py patches/ghostium/0001-*.patch

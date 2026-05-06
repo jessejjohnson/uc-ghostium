@@ -1,0 +1,55 @@
+Subject: [ghostium] wire the overlay into chrome/browser, blink modules, and public mojom
+
+Per plan.md section 3.5, this is the single GN-touching patch. It adds a
+dep group in //chrome/browser that pulls in the overlay, appends the Blink
+renderer-side module to //third_party/blink/renderer/modules, and exposes
+the Ghostium mojom under //third_party/blink/public/mojom.
+
+---
+ chrome/browser/BUILD.gn                              |  9 +++++++++
+ third_party/blink/public/mojom/BUILD.gn              |  4 ++++
+ third_party/blink/renderer/modules/BUILD.gn          |  4 ++++
+ 3 files changed, 17 insertions(+)
+
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -1,6 +1,15 @@
+ # Copyright 2012 The Chromium Authors
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
+ 
++# GHOSTIUM-OVERLAY-BEGIN
++group("ghostium_overlay_all") {
++  deps = [
++    "//ghostium_src/overlay/chrome/browser/ghostium",
++    "//ghostium_src/overlay/chrome/browser/ghostium/cdp",
++  ]
++}
++# GHOSTIUM-OVERLAY-END
++
+ import("//build/config/chrome_build.gni")
+
+diff --git a/third_party/blink/public/mojom/BUILD.gn b/third_party/blink/public/mojom/BUILD.gn
+--- a/third_party/blink/public/mojom/BUILD.gn
++++ b/third_party/blink/public/mojom/BUILD.gn
+@@ -1,3 +1,7 @@
+ # Copyright 2018 The Chromium Authors
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
++
++# GHOSTIUM-OVERLAY: expose the Ghostium mojom under the public component so
++# renderer code can depend on it via //third_party/blink/public/mojom.
++# Appended to the public mojom component: see plan.md section 3.5.
+
+diff --git a/third_party/blink/renderer/modules/BUILD.gn b/third_party/blink/renderer/modules/BUILD.gn
+--- a/third_party/blink/renderer/modules/BUILD.gn
++++ b/third_party/blink/renderer/modules/BUILD.gn
+@@ -1,3 +1,7 @@
+ # Copyright 2014 The Chromium Authors
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
++
++# GHOSTIUM-OVERLAY: pull in the renderer-side FingerprintNoiseSource.
++# Appended to the modules source_set deps: see plan.md section 3.5.
++# Target: //ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp

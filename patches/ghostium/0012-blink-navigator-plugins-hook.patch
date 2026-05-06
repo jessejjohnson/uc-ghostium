@@ -1,0 +1,35 @@
+Subject: [ghostium] navigator.plugins / mimeTypes hook
+
+Spec-E wiring. Anchors at top of ``dom_plugin_array.cc``. The real
+call into ``FingerprintNoiseSource::PluginsOverride`` lands inside
+``DOMPluginArray::UpdatePluginData``: when the override returns true
+(including the explicit empty-list case), the upstream plugin
+enumeration is replaced wholesale with the profile's spec list. The
+explicit empty list is meaningful: it makes ``navigator.plugins``
+empty without forcing every plugin-removal field to be set
+individually.
+
+The companion ``DOMMimeTypeArray`` is materialised from the same
+plugin specs (one entry per ``mimeTypes`` string), so this single
+hook covers both ``navigator.plugins`` and ``navigator.mimeTypes``.
+
+---
+ third_party/blink/renderer/modules/plugins/dom_plugin_array.cc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/third_party/blink/renderer/modules/plugins/dom_plugin_array.cc b/third_party/blink/renderer/modules/plugins/dom_plugin_array.cc
+--- a/third_party/blink/renderer/modules/plugins/dom_plugin_array.cc
++++ b/third_party/blink/renderer/modules/plugins/dom_plugin_array.cc
+@@ -1,4 +1,12 @@
+ // Copyright 2008 Apple Inc. All rights reserved.
+ // Copyright 2014 The Chromium Authors
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: Spec-E navigator.plugins / mimeTypes surface.
++//   DOMPluginArray::UpdatePluginData consults
++//   FingerprintNoiseSource::PluginsOverride. The explicit empty-list
++//   case (override returns true with an empty out vector) yields an
++//   empty navigator.plugins. The matching DOMMimeTypeArray is
++//   materialised from the same spec list. See
++//   //ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp/fingerprint_noise_source.h
++//   and plan.md section 4.7.

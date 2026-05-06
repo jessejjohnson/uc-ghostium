@@ -1,0 +1,4 @@
+[submodule "third_party/ungoogled-chromium"]
+	path = third_party/ungoogled-chromium
+	url = https://github.com/ungoogled-software/ungoogled-chromium.git
+	branch = master

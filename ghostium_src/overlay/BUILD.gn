@@ -1,0 +1,13 @@
+# Top-level Ghostium overlay aggregation target.
+#
+# The ``ghostium_overlay_tests`` meta-target is consumed by
+# //build/run_unit_tests.sh and by .github/workflows/nightly-build.yml.
+
+group("ghostium_overlay_tests") {
+  testonly = true
+  deps = [
+    "//ghostium_src/overlay/chrome/browser/ghostium:ghostium_overlay_browser_tests",
+    "//ghostium_src/overlay/chrome/browser/ghostium/cdp:ghostium_overlay_cdp_tests",
+    "//ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp:ghostium_overlay_renderer_tests",
+  ]
+}
