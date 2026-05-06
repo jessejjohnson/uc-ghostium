@@ -255,6 +255,10 @@ stage_prune() {
     return 0
   fi
 
+  # UC's prune_binaries logs Exists/Absent using ``Path(cpath).exists()`` (cwd-relative)
+  # while deletion uses the absolute unpack_root argument. Run from Chromium src so
+  # those INFO lines reflect the real tree; pruning still targets CHROMIUM_SRC either way.
+  cd "${CHROMIUM_SRC}"
   python3 "${prune}" "${CHROMIUM_SRC}" "${uc_root}/pruning.list"
 }
 

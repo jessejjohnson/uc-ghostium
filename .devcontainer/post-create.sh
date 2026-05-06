@@ -42,6 +42,8 @@ fi
 #    overlay sync since the overlay only adds files outside UC's pruning
 #    list).
 log "Applying UC prune_binaries"
+# Match cwd to Chromium src so UC's Exists/Absent INFO lines use the correct tree.
+cd "${CHROMIUM_SRC}"
 python3 "${UC_ROOT}/utils/prune_binaries.py" \
   "${CHROMIUM_SRC}" \
   "${UC_ROOT}/pruning.list"

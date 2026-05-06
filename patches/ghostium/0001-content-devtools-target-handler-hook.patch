@@ -27,23 +27,25 @@ PDL linter at CI time and by the generated CDP bindings at build time).
 diff --git a/content/browser/devtools/protocol/target_handler.cc b/content/browser/devtools/protocol/target_handler.cc
 --- a/content/browser/devtools/protocol/target_handler.cc
 +++ b/content/browser/devtools/protocol/target_handler.cc
-@@ -1,3 +1,7 @@
- // Copyright 2017 The Chromium Authors
+@@ -1,6 +1,10 @@
+ // Copyright 2016 The Chromium Authors
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
 +// GHOSTIUM-HOOK-ANCHOR: CDP dispatch for
 +//   Target.{create,set,clear}BrowserContextFingerprint lives in the
 +//   //ghostium_src/overlay/chrome/browser/ghostium/cdp/ overlay; see
 +//   plan.md section 4.4.
+ 
+ #include "content/browser/devtools/protocol/target_handler.h"
 
 diff --git a/third_party/blink/public/devtools_protocol/browser_protocol.pdl b/third_party/blink/public/devtools_protocol/browser_protocol.pdl
 --- a/third_party/blink/public/devtools_protocol/browser_protocol.pdl
 +++ b/third_party/blink/public/devtools_protocol/browser_protocol.pdl
-@@ -1,3 +1,63 @@
+@@ -7,6 +7,66 @@
  version
    major 1
    minor 3
-+
+ 
 +# GHOSTIUM-PDL-BEGIN: Target domain extensions for Ghostium fingerprint
 +# profiles. The real merge into the ``domain Target`` block lives at the
 +# bottom of this file; this is a structural lint anchor only.
@@ -103,3 +105,6 @@ diff --git a/third_party/blink/public/devtools_protocol/browser_protocol.pdl b/t
 +  command clearBrowserContextFingerprint
 +    description Clear fingerprint profile for a BrowserContext.
 +# GHOSTIUM-PDL-END
++
+ include domains/Accessibility.pdl
+ include domains/Animation.pdl
