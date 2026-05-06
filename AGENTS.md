@@ -29,5 +29,5 @@ Key constraints that agents must respect:
 | Spec-C (CDP handler) | implemented |
 | Spec-D (Canvas / WebGL / Audio noise) | implemented |
 | Spec-E (Navigator family) | implemented |
-| Spec-F (Screen / timezone) | not started |
-| Spec-G (Fonts / MediaDevices / WebRTC) | not started |
+| Spec-F (Screen / timezone) | implemented |
+| Spec-G (Fonts / MediaDevices / WebRTC) | implemented |

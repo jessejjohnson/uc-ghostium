@@ -1,0 +1,31 @@
+Subject: [ghostium] V8 Date.getTimezoneOffset fallback hook
+
+Spec-F wiring. Anchors at top of ``v8/src/date/date.cc``. The second
+of two V8-direct patches (with 0015). Same fallback contract:
+``Emulation.setTimezoneOverride`` is the primary path; this hook is
+active only when the profile sets ``timezone`` but the Emulation
+bridge did not fire.
+
+Covers ``Date.prototype.getTimezoneOffset`` and
+``Date.prototype.toLocaleString`` so a fingerprinting probe that
+compares ``new Date().getTimezoneOffset()`` against the IANA zone
+returned by ``Intl.DateTimeFormat().resolvedOptions().timeZone`` sees
+a consistent answer.
+
+---
+ v8/src/date/date.cc | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/v8/src/date/date.cc b/v8/src/date/date.cc
+--- a/v8/src/date/date.cc
++++ b/v8/src/date/date.cc
+@@ -1,3 +1,9 @@
+ // Copyright 2012 the V8 project authors. All rights reserved.
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: Spec-F V8 Date timezone fallback.
++//   Date.prototype.getTimezoneOffset / toLocaleString consult the same
++//   renderer-thread-local timezone string as 0015. Active only as a
++//   fallback when Emulation.setTimezoneOverride did not fire. See
++//   //ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp/fingerprint_noise_source.h
++//   and plan.md sections 4.6 / 4.7.

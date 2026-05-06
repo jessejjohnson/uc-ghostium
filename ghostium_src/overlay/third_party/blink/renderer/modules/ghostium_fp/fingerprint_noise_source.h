@@ -104,6 +104,23 @@ class MODULES_EXPORT FingerprintNoiseSource final
   bool PluginsOverride(
       WTF::Vector<mojom::blink::GhostiumPluginSpecPtr>* out) const;
 
+  // Spec-G: MediaDevices.enumerateDevices override. Same shape as
+  // ``PluginsOverride``: an explicit empty list reports true (the page
+  // sees no devices) so a profile can deny enumeration without setting
+  // every device kind individually.
+  bool MediaDevicesOverride(
+      WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr>* out) const;
+
+  // Spec-G: WebRTC ICE policy. Returns true when the profile carries an
+  // explicit ``webrtc_policy``; the consumer applies the policy at
+  // RTCPeerConnection construction time.
+  bool WebRTCPolicyOverride(mojom::blink::GhostiumWebRTCPolicy* out) const;
+
+  // Spec-G: when true, ICE candidate gathering surfaces only mdns
+  // candidates (suppressing host candidates with raw IPs). Returns true
+  // when the profile carries an explicit ``webrtc_mdns_only`` value.
+  bool WebRTCMdnsOnlyOverride(bool* out) const;
+
   void Trace(Visitor* visitor) const override;
 
  private:

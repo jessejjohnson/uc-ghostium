@@ -47,6 +47,16 @@ TEST_F(FingerprintNoiseSourceTest, PassthroughWhenNoProfile) {
 
   WTF::Vector<mojom::blink::GhostiumPluginSpecPtr> plugins_out;
   EXPECT_FALSE(source.PluginsOverride(&plugins_out));
+
+  WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr> devs_out;
+  EXPECT_FALSE(source.MediaDevicesOverride(&devs_out));
+
+  mojom::blink::GhostiumWebRTCPolicy policy_out =
+      mojom::blink::GhostiumWebRTCPolicy::kDefault;
+  EXPECT_FALSE(source.WebRTCPolicyOverride(&policy_out));
+
+  bool mdns_out = false;
+  EXPECT_FALSE(source.WebRTCMdnsOnlyOverride(&mdns_out));
 }
 
 TEST_F(FingerprintNoiseSourceTest, OverridesReflectProfile) {
@@ -265,6 +275,185 @@ TEST_F(FingerprintNoiseSourceTest, Spec_E_PluginsOverrideAbsentFallsThrough) {
 
   WTF::Vector<mojom::blink::GhostiumPluginSpecPtr> out;
   EXPECT_FALSE(source.PluginsOverride(&out));
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_FontsWhitelistEnforced) {
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+  WTF::Vector<WTF::String> fonts;
+  fonts.push_back("Roboto");
+  fonts.push_back("Inter");
+  profile->fonts_whitelist = std::move(fonts);
+  source.SetProfile(std::move(profile));
+
+  EXPECT_TRUE(source.HasFontWhitelist());
+  EXPECT_TRUE(source.FontAllowed("Roboto"));
+  EXPECT_TRUE(source.FontAllowed("Inter"));
+  // Generic families always allowed regardless of whitelist.
+  EXPECT_TRUE(source.FontAllowed("serif"));
+  EXPECT_TRUE(source.FontAllowed("sans-serif"));
+  EXPECT_TRUE(source.FontAllowed("monospace"));
+  // Non-whitelisted concrete family rejected.
+  EXPECT_FALSE(source.FontAllowed("Comic Sans MS"));
+  EXPECT_FALSE(source.FontAllowed("Arial"));
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_FontsEmptyWhitelistOnlyGenerics) {
+  // Explicit empty whitelist means "deny every concrete family"; only the
+  // generic fallback names survive.
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+  profile->fonts_whitelist = WTF::Vector<WTF::String>();
+  source.SetProfile(std::move(profile));
+
+  EXPECT_TRUE(source.HasFontWhitelist());
+  EXPECT_FALSE(source.FontAllowed("Roboto"));
+  EXPECT_TRUE(source.FontAllowed("serif"));
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_MediaDevicesOverride) {
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+
+  WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr> devs;
+  auto cam = mojom::blink::GhostiumMediaDeviceSpec::New();
+  cam->device_id = "camera-1";
+  cam->kind = "videoinput";
+  cam->label = "Front camera";
+  cam->group_id = "g1";
+  devs.push_back(std::move(cam));
+
+  auto mic = mojom::blink::GhostiumMediaDeviceSpec::New();
+  mic->device_id = "mic-1";
+  mic->kind = "audioinput";
+  mic->label = "Built-in mic";
+  mic->group_id = "g2";
+  devs.push_back(std::move(mic));
+
+  profile->media_devices = std::move(devs);
+  source.SetProfile(std::move(profile));
+
+  WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr> out;
+  ASSERT_TRUE(source.MediaDevicesOverride(&out));
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out[0]->device_id, "camera-1");
+  EXPECT_EQ(out[0]->kind, "videoinput");
+  EXPECT_EQ(out[1]->device_id, "mic-1");
+  EXPECT_EQ(out[1]->kind, "audioinput");
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_MediaDevicesEmptyListIsExplicit) {
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+  profile->media_devices =
+      WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr>();
+  source.SetProfile(std::move(profile));
+
+  WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr> out;
+  EXPECT_TRUE(source.MediaDevicesOverride(&out));
+  EXPECT_TRUE(out.empty());
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_WebRTCPolicyAllValues) {
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  for (auto policy : {
+           mojom::blink::GhostiumWebRTCPolicy::kDefault,
+           mojom::blink::GhostiumWebRTCPolicy::kDefaultPublicInterfaceOnly,
+           mojom::blink::GhostiumWebRTCPolicy::kDisableNonProxiedUdp,
+           mojom::blink::GhostiumWebRTCPolicy::kDisableBoth,
+       }) {
+    auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+    profile->webrtc_policy = policy;
+    source.SetProfile(std::move(profile));
+
+    mojom::blink::GhostiumWebRTCPolicy out =
+        mojom::blink::GhostiumWebRTCPolicy::kDefault;
+    ASSERT_TRUE(source.WebRTCPolicyOverride(&out));
+    EXPECT_EQ(out, policy);
+  }
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_G_WebRTCMdnsOnlyToggle) {
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  for (bool value : {true, false}) {
+    auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+    profile->webrtc_mdns_only = value;
+    source.SetProfile(std::move(profile));
+
+    bool out = !value;
+    ASSERT_TRUE(source.WebRTCMdnsOnlyOverride(&out));
+    EXPECT_EQ(out, value);
+  }
+}
+
+TEST_F(FingerprintNoiseSourceTest, Spec_F_ScreenDprTimezoneRoundtrip) {
+  // Spec-F covers all six screen.* getters, window.devicePixelRatio, and
+  // Intl.DateTimeFormat / Date timezone. Every surface must round-trip
+  // through the cached profile.
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+
+  auto screen = mojom::blink::GhostiumScreenSpec::New();
+  screen->width = 2560;
+  screen->height = 1440;
+  screen->avail_width = 2560;
+  screen->avail_height = 1400;
+  screen->color_depth = 30;
+  screen->pixel_depth = 30;
+  profile->screen = std::move(screen);
+  profile->device_pixel_ratio = 1.5;
+  profile->timezone = "Europe/Berlin";
+
+  source.SetProfile(std::move(profile));
+  ASSERT_TRUE(source.IsActive());
+
+  uint32_t u = 0;
+  EXPECT_TRUE(source.ScreenWidthOverride(&u));
+  EXPECT_EQ(u, 2560u);
+  EXPECT_TRUE(source.ScreenHeightOverride(&u));
+  EXPECT_EQ(u, 1440u);
+  EXPECT_TRUE(source.ScreenAvailWidthOverride(&u));
+  EXPECT_EQ(u, 2560u);
+  EXPECT_TRUE(source.ScreenAvailHeightOverride(&u));
+  EXPECT_EQ(u, 1400u);
+  EXPECT_TRUE(source.ScreenColorDepthOverride(&u));
+  EXPECT_EQ(u, 30u);
+  EXPECT_TRUE(source.ScreenPixelDepthOverride(&u));
+  EXPECT_EQ(u, 30u);
+
+  double d = 0;
+  EXPECT_TRUE(source.DevicePixelRatioOverride(&d));
+  EXPECT_EQ(d, 1.5);
+
+  WTF::String s;
+  EXPECT_TRUE(source.TimezoneOverride(&s));
+  EXPECT_EQ(s, "Europe/Berlin");
+}
+
+TEST_F(FingerprintNoiseSourceTest,
+       Spec_F_ScreenOverridesAbsentWhenScreenUnset) {
+  // Profile carries DPR + timezone but no ScreenSpec. The six screen.*
+  // overrides must report false (passthrough); DPR + timezone still
+  // override.
+  auto& source = FingerprintNoiseSource::From(*GetDocument().domWindow());
+  auto profile = mojom::blink::GhostiumFingerprintProfile::New();
+  profile->device_pixel_ratio = 3.0;
+  profile->timezone = "UTC";
+  source.SetProfile(std::move(profile));
+
+  uint32_t u = 0;
+  EXPECT_FALSE(source.ScreenWidthOverride(&u));
+  EXPECT_FALSE(source.ScreenAvailWidthOverride(&u));
+  EXPECT_FALSE(source.ScreenColorDepthOverride(&u));
+  EXPECT_FALSE(source.ScreenPixelDepthOverride(&u));
+
+  double d = 0;
+  EXPECT_TRUE(source.DevicePixelRatioOverride(&d));
+  EXPECT_EQ(d, 3.0);
+
+  WTF::String s;
+  EXPECT_TRUE(source.TimezoneOverride(&s));
+  EXPECT_EQ(s, "UTC");
 }
 
 TEST_F(FingerprintNoiseSourceTest, Spec_E_NavigatorFamilyRoundtrip) {

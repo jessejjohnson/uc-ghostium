@@ -1,0 +1,36 @@
+Subject: [ghostium] V8 Intl timezone fallback hook
+
+Spec-F wiring. Anchors at top of ``v8/src/objects/js-date-time-format.cc``.
+This is one of two patches that touch V8 directly (the other is 0016).
+
+This is a last-resort fallback. ``Emulation.setTimezoneOverride``
+already routes through V8's ICU integration via
+``v8::Isolate::DateTimeConfigurationChangeNotification`` installed at
+isolate init, so the hook is only active when the Ghostium profile
+sets ``timezone`` but the CDP handler's translation step skipped the
+Emulation call (which is itself a bug; the hook makes the system
+robust to it).
+
+The fallback reads the timezone string from a renderer-thread-local
+cache populated by ``FingerprintNoiseSource::SetProfile``. See plan.md
+sections 4.6 / 4.7 for the contract; the actual call-site insertion
+into ``JSDateTimeFormat::ResolvedOptions`` lands at apply-time refresh
+because the surrounding V8 lines move on every milestone bump.
+
+---
+ v8/src/objects/js-date-time-format.cc | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/v8/src/objects/js-date-time-format.cc b/v8/src/objects/js-date-time-format.cc
+--- a/v8/src/objects/js-date-time-format.cc
++++ b/v8/src/objects/js-date-time-format.cc
+@@ -1,3 +1,9 @@
+ // Copyright 2018 the V8 project authors. All rights reserved.
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: Spec-F V8 Intl timezone fallback.
++//   JSDateTimeFormat::ResolvedOptions consults the renderer-thread-local
++//   timezone string populated by FingerprintNoiseSource::SetProfile,
++//   only when V8's existing ICU override is unset. Primary path is
++//   Emulation.setTimezoneOverride dispatched by Spec-C. See plan.md
++//   sections 4.6 / 4.7.

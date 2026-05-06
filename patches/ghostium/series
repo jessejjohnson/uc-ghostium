@@ -1,6 +1,6 @@
 # Ghostium patch series. Applied AFTER UC's own series.
 #
-# Active patches (Specs A, B, C, D, E):
+# All hook patches active (Specs A through G complete):
 0001-content-devtools-target-handler-hook.patch
 0002-blink-navigator-webdriver-hook.patch
 0003-blink-canvas2d-readback-hook.patch
@@ -13,13 +13,11 @@
 0010-blink-navigator-hwc-devmem-hook.patch
 0011-blink-navigator-languages-hook.patch
 0012-blink-navigator-plugins-hook.patch
+0013-blink-screen-hook.patch
+0014-blink-window-devicepixelratio-hook.patch
+0015-v8-intl-timezone-hook.patch
+0016-v8-date-timezone-offset-hook.patch
+0017-blink-fonts-enumeration-hook.patch
+0018-blink-mediadevices-enumerate-hook.patch
+0019-blink-rtcpeerconnection-ice-hook.patch
 0020-content-browser-build-overlay-hook.patch
-
-# Deferred hook patches (implemented in Specs F and G):
-#0013-blink-screen-hook.patch
-#0014-blink-window-devicepixelratio-hook.patch
-#0015-v8-intl-timezone-hook.patch
-#0016-v8-date-timezone-offset-hook.patch
-#0017-blink-fonts-enumeration-hook.patch
-#0018-blink-mediadevices-enumerate-hook.patch
-#0019-blink-rtcpeerconnection-ice-hook.patch

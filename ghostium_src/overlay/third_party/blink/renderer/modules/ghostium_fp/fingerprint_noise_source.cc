@@ -365,4 +365,39 @@ bool FingerprintNoiseSource::PluginsOverride(
   return true;
 }
 
+bool FingerprintNoiseSource::MediaDevicesOverride(
+    WTF::Vector<mojom::blink::GhostiumMediaDeviceSpecPtr>* out) const {
+  DCHECK(IsMainThread());
+  if (!profile_received_ || !profile_->media_devices.has_value()) {
+    return false;
+  }
+  out->clear();
+  out->ReserveInitialCapacity(
+      static_cast<wtf_size_t>(profile_->media_devices->size()));
+  for (const auto& d : *profile_->media_devices) {
+    out->push_back(d ? d->Clone()
+                     : mojom::blink::GhostiumMediaDeviceSpecPtr());
+  }
+  return true;
+}
+
+bool FingerprintNoiseSource::WebRTCPolicyOverride(
+    mojom::blink::GhostiumWebRTCPolicy* out) const {
+  DCHECK(IsMainThread());
+  if (!profile_received_ || !profile_->webrtc_policy.has_value()) {
+    return false;
+  }
+  *out = *profile_->webrtc_policy;
+  return true;
+}
+
+bool FingerprintNoiseSource::WebRTCMdnsOnlyOverride(bool* out) const {
+  DCHECK(IsMainThread());
+  if (!profile_received_ || !profile_->webrtc_mdns_only.has_value()) {
+    return false;
+  }
+  *out = *profile_->webrtc_mdns_only;
+  return true;
+}
+
 }  // namespace blink

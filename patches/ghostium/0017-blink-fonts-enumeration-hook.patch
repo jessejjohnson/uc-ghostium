@@ -1,0 +1,50 @@
+Subject: [ghostium] Font enumeration + @font-face hook
+
+Spec-G wiring. Anchors at top of two Blink files. The real calls into
+``FingerprintNoiseSource::HasFontWhitelist`` /
+``FingerprintNoiseSource::FontAllowed`` land at:
+
+  * ``FontManager::query``-style enumeration paths in
+    ``font_manager.cc`` (``document.fonts`` iteration, the
+    ``window.queryLocalFonts`` Permissions-policy gated API).
+  * ``FontFaceSetDocument::CheckFont`` in ``font_face_set_document.cc``
+    so that a ``@font-face`` declaration whose ``src: local("X")``
+    references a non-whitelisted family fails to match (forcing the
+    cascade to the next fallback in the family list).
+
+Generic families (``serif`` / ``sans-serif`` / ``monospace`` /
+``cursive`` / ``fantasy`` / ``system-ui`` / ``math`` / ``emoji`` /
+``fangsong``) are always allowed; the predicate handles that.
+
+---
+ third_party/blink/renderer/modules/font_access/font_manager.cc      | 6 ++++++
+ third_party/blink/renderer/core/css/font_face_set_document.cc       | 6 ++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/third_party/blink/renderer/modules/font_access/font_manager.cc b/third_party/blink/renderer/modules/font_access/font_manager.cc
+--- a/third_party/blink/renderer/modules/font_access/font_manager.cc
++++ b/third_party/blink/renderer/modules/font_access/font_manager.cc
+@@ -1,3 +1,9 @@
+ // Copyright 2020 The Chromium Authors
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: Spec-G font enumeration filter.
++//   FontManager::query consults FingerprintNoiseSource::FontAllowed for
++//   every candidate family before yielding it to JS. Generic families
++//   pass through unconditionally. See
++//   //ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp/fingerprint_noise_source.h
++//   and plan.md section 4.7.
+
+diff --git a/third_party/blink/renderer/core/css/font_face_set_document.cc b/third_party/blink/renderer/core/css/font_face_set_document.cc
+--- a/third_party/blink/renderer/core/css/font_face_set_document.cc
++++ b/third_party/blink/renderer/core/css/font_face_set_document.cc
+@@ -1,3 +1,9 @@
+ // Copyright 2014 The Chromium Authors
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++// GHOSTIUM-HOOK-ANCHOR: Spec-G CSS @font-face match filter.
++//   FontFaceSetDocument::CheckFont consults
++//   FingerprintNoiseSource::FontAllowed so a non-whitelisted local()
++//   src fails to match and falls through to the next cascade entry. See
++//   //ghostium_src/overlay/third_party/blink/renderer/modules/ghostium_fp/fingerprint_noise_source.h
++//   and plan.md section 4.7.
