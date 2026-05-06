@@ -67,7 +67,7 @@ git submodule update --init --recursive
 devcontainer up --workspace-folder .
 ```
 
-The devcontainer's `post-create.sh` clones `depot_tools`, fetches Chromium at the pinned tag, runs `install-build-deps.sh` + `gclient runhooks`, applies UC's prune + domain substitution, symlinks the overlay, and applies the combined patch series. Depending on bandwidth and hardware this takes 40 minutes to a few hours.
+The devcontainer's `post-create.sh` clones `depot_tools`, fetches Chromium at the pinned tag, runs `install-build-deps.sh` + `gclient runhooks`, applies UC's binary prune, symlinks the overlay, applies the combined patch series, and finally runs UC's domain substitution (this strict prune → patch → domsub order is required by UC). Depending on bandwidth and hardware this takes 40 minutes to a few hours.
 
 #### Build + test
 

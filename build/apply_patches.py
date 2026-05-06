@@ -35,12 +35,35 @@ def read_series(series_file: Path) -> list[str]:
 
 
 def apply_one(patch_path: Path, chromium_src: Path) -> None:
+    # We use GNU ``patch -p1 --ignore-whitespace`` (the same invocation as
+    # UC's own ``utils/patches.py apply``) for every patch in both series.
+    #
+    # Why not ``git apply --3way``:
+    #   * UC's patches are plain unified diffs without ``index abc..def``
+    #     headers, so ``git apply --3way`` cannot fall back to a 3-way
+    #     merge ("repository lacks the necessary blob to perform 3-way
+    #     merge"). They are authored against UC's pinned Chromium tag and
+    #     expected to apply cleanly with a tolerant patcher.
+    #   * Chromium is fetched with ``fetch --no-history``; even the
+    #     git-formatted Ghostium patches would not have the historical
+    #     blobs available for 3-way fallback.
+    # GNU patch with ``--ignore-whitespace`` matches UC's reference
+    # behavior and works uniformly for both series.
     if not patch_path.is_file():
         raise FileNotFoundError(f"Missing patch file: {patch_path}")
     print(f"[apply_patches] applying {patch_path.relative_to(GHOSTIUM_ROOT)}")
     subprocess.run(
-        ["git", "apply", "--3way", str(patch_path)],
-        cwd=chromium_src,
+        [
+            "patch",
+            "-p1",
+            "--ignore-whitespace",
+            "--no-backup-if-mismatch",
+            "--forward",
+            "-i",
+            str(patch_path),
+            "-d",
+            str(chromium_src),
+        ],
         check=True,
     )
 

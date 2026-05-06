@@ -29,9 +29,12 @@
 #                   Chromium build dependencies)
 #   runhooks      : ``gclient runhooks`` (downloads sysroots etc.)
 #   uc-submodule  : git submodule update for third_party/ungoogled-chromium
-#   prune         : UC prune_binaries.py + domain_substitution.py
+#   prune         : UC prune_binaries.py (binary blob removal only)
 #   overlay       : symlink ghostium_src/overlay into the Chromium tree
 #   patches       : apply UC's patch series + Ghostium's series
+#   domsub        : UC domain_substitution.py apply (MUST run after patches;
+#                   substituting domains before patching corrupts the patch
+#                   context and makes the series fail to apply)
 #   gen           : ``gn gen`` with config/gn_args.gn
 #   build         : ``autoninja chrome`` (full Chromium build, hours)
 #   test          : build + run the overlay unit_tests
@@ -58,8 +61,8 @@ DEPOT_TOOLS_PATH="${DEPOT_TOOLS_PATH:-}"
 GN_OUT="${GN_OUT:-}"
 CCACHE_DIR="${CCACHE_DIR:-}"
 BUILD_TARGET="${BUILD_TARGET:-chrome}"
-STEPS_DEFAULT="apt,depot,fetch,chromium-deps,runhooks,uc-submodule,prune,overlay,patches,gen"
-STEPS_ALL="apt,depot,fetch,chromium-deps,runhooks,uc-submodule,prune,overlay,patches,gen,build,test"
+STEPS_DEFAULT="apt,depot,fetch,chromium-deps,runhooks,uc-submodule,prune,overlay,patches,domsub,gen"
+STEPS_ALL="apt,depot,fetch,chromium-deps,runhooks,uc-submodule,prune,overlay,patches,domsub,gen,build,test"
 
 usage() {
   cat <<EOF
@@ -241,10 +244,9 @@ stage_uc_submodule() {
 }
 
 stage_prune() {
-  log "stage: prune - UC prune_binaries.py + domain_substitution.py"
+  log "stage: prune - UC prune_binaries.py"
   local uc_root="${GHOSTIUM_ROOT}/third_party/ungoogled-chromium"
   local prune="${uc_root}/utils/prune_binaries.py"
-  local domsub="${uc_root}/utils/domain_substitution.py"
 
   if [[ ! -x "${prune}" && ! -f "${prune}" ]]; then
     warn "UC utils/ not present at ${uc_root}/utils/. Run the 'uc-submodule' stage first."
@@ -254,6 +256,27 @@ stage_prune() {
   fi
 
   python3 "${prune}" "${CHROMIUM_SRC}" "${uc_root}/pruning.list"
+}
+
+stage_domsub() {
+  # Per UC's docs/building.md the canonical order is:
+  #   1. prune_binaries
+  #   2. apply patches
+  #   3. domain_substitution apply
+  # Running domain substitution before the patch series rewrites domain
+  # names in the very files patches expect to see in their original form,
+  # which makes ``patch`` (and ``git apply``) reject hunks with
+  # "does not match index" / "Hunk #N FAILED".
+  log "stage: domsub - UC domain_substitution.py apply"
+  local uc_root="${GHOSTIUM_ROOT}/third_party/ungoogled-chromium"
+  local domsub="${uc_root}/utils/domain_substitution.py"
+
+  if [[ ! -f "${domsub}" ]]; then
+    warn "UC utils/ not present at ${uc_root}/utils/. Run the 'uc-submodule' stage first."
+    warn "Skipping domsub stage; release builds must apply domain substitution."
+    return 0
+  fi
+
   python3 "${domsub}" apply \
     -r "${uc_root}/domain_regex.list" \
     -f "${uc_root}/domain_substitution.list" \
@@ -316,7 +339,7 @@ log "ccache dir:      ${CCACHE_DIR}"
 log "steps:           ${STEPS}"
 
 # Stages must run in this fixed order so the data flow is correct.
-ORDER=(apt depot fetch chromium-deps runhooks uc-submodule prune overlay patches gen build test)
+ORDER=(apt depot fetch chromium-deps runhooks uc-submodule prune overlay patches domsub gen build test)
 for step in "${ORDER[@]}"; do
   if want_step "${step}"; then
     case "${step}" in
@@ -329,6 +352,7 @@ for step in "${ORDER[@]}"; do
       prune)          stage_prune;;
       overlay)        stage_overlay;;
       patches)        stage_patches;;
+      domsub)         stage_domsub;;
       gen)            stage_gen;;
       build)          stage_build;;
       test)           stage_test;;

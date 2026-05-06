@@ -38,22 +38,31 @@ if [ ! -d "${CHROMIUM_SRC}/.git" ]; then
   gclient runhooks
 fi
 
-# 4. UC prune + domain substitution (from the submodule).
-log "Applying UC prune + domain substitution"
+# 4. UC binary prune (must run before patches; safe to do before/after
+#    overlay sync since the overlay only adds files outside UC's pruning
+#    list).
+log "Applying UC prune_binaries"
 python3 "${UC_ROOT}/utils/prune_binaries.py" \
   "${CHROMIUM_SRC}" \
   "${UC_ROOT}/pruning.list"
+
+# 5. Ghostium overlay.
+log "Syncing Ghostium overlay into Chromium source tree"
+python3 "${GHOSTIUM_ROOT}/build/sync_overlay.py"
+
+# 6. Patch series. Per UC's docs/building.md the order MUST be
+#    prune -> patches -> domain_substitution. Substituting domains before
+#    patching rewrites context lines in the very files patches expect
+#    untouched, which makes ``patch`` reject hunks.
+log "Applying UC patch series + Ghostium patch series"
+python3 "${GHOSTIUM_ROOT}/build/apply_patches.py"
+
+# 7. Domain substitution (after patches).
+log "Applying UC domain_substitution"
 python3 "${UC_ROOT}/utils/domain_substitution.py" apply \
   -r "${UC_ROOT}/domain_regex.list" \
   -f "${UC_ROOT}/domain_substitution.list" \
   -c "${UC_ROOT}/domsubcache.tar.gz" \
   "${CHROMIUM_SRC}"
-
-# 5. Ghostium overlay + patches.
-log "Syncing Ghostium overlay into Chromium source tree"
-python3 "${GHOSTIUM_ROOT}/build/sync_overlay.py"
-
-log "Applying UC patch series + Ghostium patch series"
-python3 "${GHOSTIUM_ROOT}/build/apply_patches.py"
 
 log "Bootstrap complete. Next step: gn gen + autoninja."
