@@ -292,10 +292,13 @@ move it aside or rm -rf it before re-running this stage."
 
   mkdir -p "${CHROMIUM_SRC}"
   cd "${UC_ROOT}"
+  # `-i/--ini` is nargs='+' (greedy). The `--` separator stops flag parsing
+  # so ${CHROMIUM_SRC} is taken as the positional `output`, not a second
+  # value for --ini. Matches UC docs/building.md.
   python3 utils/downloads.py unpack \
     -c "${DOWNLOAD_CACHE}" \
     -i downloads.ini \
-    "${CHROMIUM_SRC}"
+    -- "${CHROMIUM_SRC}"
 
   touch "${CHROMIUM_SRC}/.ghostium_unpacked"
   log "unpack complete"
