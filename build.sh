@@ -345,6 +345,21 @@ GCLIENT_EOF
     log "wrote ${gclient_file}"
   fi
 
+  # gclient runhooks shells out to `git diff ... -G "Subproject commit"`
+  # inside src/ to check for submodule pointer changes, even when the
+  # solution is declared `managed: False`. The tarball-extracted tree has
+  # no .git/, so git aborts ("Not a git repository") and gclient bails.
+  # Stub it with an empty `git init`: the diff call now produces empty
+  # output and exits 0 (only tracked files appear in `git diff`, and we
+  # add none). The actual hooks we need (clang, sysroot, rust, node) do
+  # not use git.
+  if [[ ! -d "${CHROMIUM_SRC}/.git" ]]; then
+    log "git init ${CHROMIUM_SRC} (stub to satisfy gclient's diff probe)"
+    git -C "${CHROMIUM_SRC}" init -q
+    git -C "${CHROMIUM_SRC}" config user.email "build@ghostium.local"
+    git -C "${CHROMIUM_SRC}" config user.name "ghostium-build"
+  fi
+
   # Some hooks (notably `lastchange`) shell out to git in src/. The -lite
   # tarball ships a pre-generated LASTCHANGE file; if it is missing, write
   # a synthetic one so the hook does not abort the run.
@@ -359,9 +374,6 @@ EOF
   fi
 
   cd "${CHROMIUM_ROOT}"
-  # Use --no-history-clobber-check is not a real flag; just run runhooks.
-  # If a particular hook fails (e.g. needs git), report and continue --
-  # the only hooks we strictly require are clang, sysroot, rust, node.
   gclient runhooks
 }
 
