@@ -1,6 +1,7 @@
 # Editor / IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -28,11 +29,10 @@ out_*/
 buildtools/
 third_party/llvm-build/
 
+# Build script output
+/logs/
+
 # Patch tooling scratch
 /_scratch/
 *.rej
 *.orig
-
-# Node / markdown tooling
-node_modules/
-package-lock.json

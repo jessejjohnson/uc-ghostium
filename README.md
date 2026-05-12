@@ -1,6 +1,6 @@
 # Ghostium
 
-Ghostium is a privacy focused [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) fork that replaces the runtime behavior of every fingerprintable web API with values supplied by a CDP client per `BrowserContext`. Session isolation, cookie partitioning, cache segregation, and extension orchestration are delegated entirely to standard CDP surfaces.
+Ghostium is a privacy-focused [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) fork that replaces the runtime behavior of every fingerprintable web API with values supplied by a CDP client, per `BrowserContext`. Session isolation, cookie partitioning, cache segregation, and extension orchestration are delegated entirely to standard CDP surfaces.
 
 - **Target upstream:** ungoogled-chromium, stable Chromium milestone pinned via `config/chromium_version`.
 - **Target platform:** Linux x86_64 only.
@@ -13,19 +13,19 @@ Ghostium owns exactly two things:
 
 See [plan.md](plan.md) for the unified architecture specification and downstream implementation spec split (Spec-A through Spec-G).
 
-## Current status
+## Status
 
 All seven downstream specs are implemented (see [AGENTS.md](AGENTS.md) for the status table):
 
 | Spec | Scope | Status |
 | --- | --- | --- |
-| A | Build substrate (devcontainer, UC integration, GN patch, CI) | :white_check_mark: |
-| B | `FingerprintProfile` + Registry + Delivery + Mojo IDL + NoiseSource | :white_check_mark: |
-| C | CDP handler (`createBrowserContext` + set/clear) + Emulation bridge | :white_check_mark: |
-| D | Canvas 2D + WebGL `readPixels` + WebGL `UNMASKED_*` + AudioBuffer + AnalyserNode noise | :white_check_mark: |
-| E | Navigator family (webdriver, UA, UA-CH, hwc, deviceMemory, languages, plugins) | :white_check_mark: |
-| F | Screen + `devicePixelRatio` + timezone | :white_check_mark: |
-| G | Fonts whitelist + MediaDevices + WebRTC ICE filtering | :white_check_mark: |
+| A | Build substrate (UC integration, GN patch) | implemented |
+| B | `FingerprintProfile` + Registry + Delivery + Mojo IDL + NoiseSource | implemented |
+| C | CDP handler (`createBrowserContext` + set/clear) + Emulation bridge | implemented |
+| D | Canvas 2D + WebGL `readPixels` + WebGL `UNMASKED_*` + AudioBuffer + AnalyserNode noise | implemented |
+| E | Navigator family (webdriver, UA, UA-CH, hwc, deviceMemory, languages, plugins) | implemented |
+| F | Screen + `devicePixelRatio` + timezone | implemented |
+| G | Fonts whitelist + MediaDevices + WebRTC ICE filtering | implemented |
 
 20 hook patches are active in [`patches/ghostium/series`](patches/ghostium/series). Non-Ghostium `BrowserContext`s remain bitwise identical to upstream ungoogled-chromium (R16): every override predicate returns false and every `Apply*Noise` call is a no-op when the renderer-side `FingerprintNoiseSource` has not received a profile.
 
@@ -46,57 +46,54 @@ The fingerprint profile (defined in [`fingerprint_profile.h`](ghostium_src/overl
 
 All Mulberry32-keyed noise is deterministic per profile + input.
 
-## Quickstart
+## Build
 
-Two supported paths.
-
-### A) Devcontainer (local development)
-
-#### Prerequisites
-
-- Docker Desktop or a compatible container runtime
-- VS Code with the Dev Containers extension, or the `devcontainer` CLI
-- ~100 GB free disk space for the Chromium checkout + build outputs
-
-#### First-time setup
+One command, on a fresh Ubuntu 22.04 (or 24.04) x86_64 host:
 
 ```bash
 git clone <this-repo> ghostium
 cd ghostium
-git submodule update --init --recursive
-devcontainer up --workspace-folder .
+./build.sh
 ```
 
-The devcontainer's `post-create.sh` clones `depot_tools`, fetches Chromium at the pinned tag, runs `install-build-deps.sh` + `gclient runhooks`, applies UC's binary prune, symlinks the overlay, applies the combined patch series, and finally runs UC's domain substitution (this strict prune → patch → domsub order is required by UC). Depending on bandwidth and hardware this takes 40 minutes to a few hours.
+The script:
 
-#### Build + test
+- Auto-wraps itself in a tmux session named `ghostium-build` so SSH disconnects do not kill the build. Reattach with `tmux attach -t ghostium-build`.
+- Tees all output to `logs/build-YYYYMMDD-HHMMSS.log`.
+- Pre-flights disk (≥150 GiB free) and RAM (≥16 GiB), with a warning below 32 GiB.
+- Every stage is idempotent — re-run after any transient failure to resume.
+
+### Common invocations
 
 ```bash
-# Inside the devcontainer:
-cd "$CHROMIUM_SRC"
-gn gen out/Default --args="$(cat /workspaces/ghostium/config/gn_args.gn)"
-autoninja -C out/Default chrome
-
-# Overlay unit tests:
-autoninja -C out/Default ghostium_overlay_tests
-bash /workspaces/ghostium/build/run_unit_tests.sh
+./build.sh                  # full pipeline: deps → tarball → patches → gn → chrome
+./build.sh --no-build       # everything except the final ninja
+./build.sh --test           # adds overlay unit tests after build
+./build.sh --from build     # resume from a stage (skip earlier stages)
+./build.sh --only patches   # run a single stage
+./build.sh --help           # full flag + stage list
 ```
 
-### B) EC2 bootstrap (one-shot)
+### How it works
 
-For full Chromium builds on cloud hardware. SSH into a fresh Ubuntu 22.04 LTS EC2 instance and run:
+The script follows the canonical [ungoogled-chromium build flow](third_party/ungoogled-chromium/docs/building.md):
 
-```bash
-git clone <this-repo> uc-ghostium
-cd uc-ghostium
-./build/bootstrap_ec2.sh                  # default: deps + checkout + patches + gn gen
-./build/bootstrap_ec2.sh --steps all      # adds full chrome build + unit tests
-./build/bootstrap_ec2.sh --steps build    # rebuild only (after edits)
-```
+1. **Tarball fetch.** Chromium source is downloaded via `utils/downloads.py retrieve` — a hash-verified, resumable curl against `chromium-browser-official`. No `depot_tools fetch` / `gclient sync` of the source tree (those are the slow, flaky 80 GiB git operations).
+2. **Toolchain.** `depot_tools` is cloned only to provide the `gn` binary and `gclient runhooks`, which downloads Chromium's bundled clang, sysroot, rust, and node.
+3. **UC pipeline.** Strict order from UC docs: `prune_binaries.py` → patch series (UC + Ghostium, applied in that order by [`scripts/apply_patches.py`](scripts/apply_patches.py)) → `domain_substitution.py apply`. Domain substitution before patches corrupts the patch context and is rejected.
+4. **GN args.** `gn gen` is invoked with UC's `flags.gn` concatenated with [`config/gn_args.gn`](config/gn_args.gn). Ghostium's args take precedence on key collisions.
+5. **Build.** `ninja -C out/Default chrome`.
 
-The script is idempotent and stage-based; see [`build/bootstrap_ec2.sh`](build/bootstrap_ec2.sh) for the full stage list.
+### Recommended sizing
 
-**Recommended sizing:** `c6a.16xlarge` / `c7i.24xlarge` (CPU-bound link is the bottleneck), ≥32 GiB RAM (link can spike higher), ≥200 GiB gp3 EBS (checkout ~80 GiB + build artefacts ~30 GiB + ccache ~20 GiB), Ubuntu 22.04 LTS x86_64 AMI.
+- **Instance:** `c6a.16xlarge` / `c7i.24xlarge` (CPU-bound, 32–96 vCPU).
+- **RAM:** ≥32 GiB recommended; the script refuses to start below 16 GiB.
+- **Disk:** ≥200 GiB gp3 mounted on `$CHROMIUM_ROOT` (default: `~/chromium-build`). Tarball ~6 GiB + unpacked source ~30 GiB + build artefacts ~30 GiB + ccache ~20 GiB.
+- **AMI:** Ubuntu 22.04 LTS x86_64 (24.04 also works).
+
+### Output
+
+The built binary lands at `$CHROMIUM_ROOT/src/out/Default/chrome` (default: `~/chromium-build/src/out/Default/chrome`).
 
 ## Overlay test targets
 
@@ -111,7 +108,7 @@ The `ghostium_overlay_tests` GN group aggregates:
 | `fingerprint_noise_source_unittest` | All override predicates + Apply\*Noise wiring + Spec-D/E/F/G roundtrips |
 | `ghostium_noise_unittest` | Pure-function noise primitives (canvas / webgl / audio) |
 
-Run the whole suite via `build/run_unit_tests.sh`.
+Run the whole suite via `scripts/run_unit_tests.sh` (`./build.sh --test` does this automatically after building).
 
 ## CDP usage example
 
@@ -156,34 +153,30 @@ Subsequent `Target.createTarget` calls in that context inherit the profile; `Tar
 ## Repository layout
 
 ```text
-/
-├── .devcontainer/                  devcontainer + Dockerfile + post-create
-├── .github/workflows/              pr-lint + nightly-build
-├── build/                          patch + overlay + EC2 bootstrap tooling
-│   ├── bootstrap_ec2.sh            one-shot EC2 setup (apt → fetch → patches → build → test)
-│   ├── apply_patches.py            UC series + Ghostium series
-│   ├── sync_overlay.py             symlink overlay into Chromium src
-│   ├── ci_patch_dryrun.py          structural patch validator
-│   ├── ci_pdl_lint.py              PDL hunk linter
-│   ├── ci_mojom_lint.py            mojom linter
-│   └── run_unit_tests.sh           run all overlay unit_tests
-├── config/                         pinned versions + GN args
-├── ghostium_src/overlay/           overlay tree symlinked into Chromium src
-│   ├── chrome/browser/ghostium/    browser-process Registry + Delivery + EmulationBridge
-│   │   └── cdp/                    CDP handler (parser + Target.* dispatch)
-│   ├── public/mojom/ghostium/      Mojo IDL (FingerprintProfile)
+.
+├── build.sh                          one-shot build driver (tmux + logging + idempotent stages)
+├── scripts/                          patch + overlay tooling invoked by build.sh
+│   ├── apply_patches.py              UC series + Ghostium series
+│   ├── unapply_patches.py            reverse of apply_patches.py
+│   ├── sync_overlay.py               symlink overlay into Chromium src
+│   └── run_unit_tests.sh             run all overlay unit_tests
+├── config/                           pinned versions + GN args
+│   ├── chromium_version              pinned Chromium tag
+│   ├── ungoogled_chromium_version    pinned UC tag
+│   └── gn_args.gn                    Ghostium-specific GN args
+├── ghostium_src/overlay/             overlay tree symlinked into Chromium src
+│   ├── chrome/browser/ghostium/      browser-process Registry + Delivery + EmulationBridge
+│   │   └── cdp/                      CDP handler (parser + Target.* dispatch)
+│   ├── public/mojom/ghostium/        Mojo IDL (FingerprintProfile)
 │   └── third_party/blink/renderer/modules/ghostium_fp/
-│       │                           renderer-side FingerprintNoiseSource
-│       ├── canvas2d_noise.{h,cc}   Mulberry32-keyed RGB ±1 LSB
-│       ├── webgl_noise.{h,cc}      RGBA8 ±1 LSB + GL_FLOAT 1-ULP toggle
-│       └── audio_noise.{h,cc}      ±1e-7 PCM + ±1 LSB byte-domain
-├── patches/ghostium/               20 active hook patches (Specs A-G) + series
-├── third_party/ungoogled-chromium/ UC submodule (provides patches/ + utils/)
-├── plan.md                         unified architecture spec
-├── AGENTS.md                       agent guidance + spec status table
-└── README.md                       this file
+│                                     renderer-side FingerprintNoiseSource + noise primitives
+├── patches/ghostium/                 20 active hook patches (Specs A–G) + series
+├── third_party/ungoogled-chromium/   UC submodule (provides patches/ + utils/)
+├── plan.md                           unified architecture spec
+├── AGENTS.md                         agent guidance + spec status table
+└── README.md                         this file
 ```
 
 ## Licensing
 
-Ghostium inherits the Chromium + ungoogled-chromium license terms. Overlay code under `ghostium_src/overlay/` is under the BSD-3-Clause license unless otherwise noted in individual files.
+Ghostium inherits the Chromium + ungoogled-chromium license terms. Overlay code under `ghostium_src/overlay/` is BSD-3-Clause unless otherwise noted in individual files.

@@ -1,7 +1,7 @@
 # Top-level Ghostium overlay aggregation target.
 #
 # The ``ghostium_overlay_tests`` meta-target is consumed by
-# //build/run_unit_tests.sh and by .github/workflows/nightly-build.yml.
+# scripts/run_unit_tests.sh (invoked by build.sh --test).
 
 group("ghostium_overlay_tests") {
   testonly = true

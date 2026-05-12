@@ -1,7 +1,0 @@
-# This file is a marker. The effective series applied at build time is the
-# concatenation of:
-#
-#   third_party/ungoogled-chromium/patches/series
-#   patches/ghostium/series
-#
-# produced by build/apply_patches.py at runtime. See plan.md section 3.7.
