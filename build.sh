@@ -20,8 +20,11 @@
 #   submodule    : git submodule update --init    (UC submodule)
 #   download     : utils/downloads.py retrieve    (resumable tarball + hash)
 #   unpack       : utils/downloads.py unpack      (atomic, hash-verified)
-#   depot        : clone depot_tools              (only for gn + gclient runhooks)
-#   runhooks     : write .gclient + gclient runhooks (clang, sysroot, rust, node)
+#   depot        : clone depot_tools              (only for the gn binary)
+#   runhooks     : invoke Chromium's hook scripts directly (clang, sysroot,
+#                  rust, node, version-stamp headers). Bypasses `gclient
+#                  runhooks` because gclient probes the tree with `git diff`
+#                  and fails on a tarball checkout with no .git/.
 #   build-deps   : src/build/install-build-deps.sh --no-prompt
 #   prune        : UC prune_binaries.py           (binary blob removal)
 #   overlay      : scripts/sync_overlay.py        (symlink Ghostium overlay)
@@ -320,61 +323,96 @@ stage_depot() {
 }
 
 stage_runhooks() {
-  log "[runhooks] writing .gclient and running gclient runhooks (clang, sysroot, ...)"
+  log "[runhooks] downloading Chromium toolchain (clang, sysroot, rust, node)"
   with_path
 
-  # depot_tools' gclient runhooks does not require a .git tree, but does
-  # require a .gclient file at the parent of `src/`. We write a minimal
-  # one declaring src/ as an unmanaged solution.
-  local gclient_file="${CHROMIUM_ROOT}/.gclient"
-  if [[ ! -f "${gclient_file}" ]]; then
-    cat > "${gclient_file}" <<'GCLIENT_EOF'
-solutions = [
-  {
-    "name": "src",
-    "url": None,
-    "managed": False,
-    "custom_deps": {},
-    "custom_vars": {
-      "checkout_pgo_profiles": False,
-    },
-  },
-]
-target_os = ["linux"]
-GCLIENT_EOF
-    log "wrote ${gclient_file}"
+  # We do NOT use `gclient runhooks` here. gclient was built for git-
+  # tracked checkouts: it probes the tree with `git diff -G "Subproject
+  # commit"` and refuses to run cleanly on a tarball extraction, even
+  # with `managed: False` set. depot_tools further sets GIT_DIR/GIT_
+  # WORK_TREE in its environment which makes a stub `git init` in src/
+  # not necessarily satisfy the probe.
+  #
+  # Instead we invoke the specific hooks directly. These are the same
+  # python scripts gclient would call; they live inside src/ and have no
+  # git dependency. Versions of Chromium older than ~M115 had different
+  # script paths; the [[ -f ... ]] guards keep this forward/backward
+  # compatible across UC's pinned Chromium milestones.
+
+  cd "${CHROMIUM_SRC}"
+
+  local ver
+  ver=$(tr -d '[:space:]' < "${GHOSTIUM_ROOT}/config/chromium_version")
+
+  # ---- Synthetic version stamps ------------------------------------------
+  # lastchange.py normally reads git. With no .git we write the files
+  # directly. build/util/LASTCHANGE is read by many parts of the build.
+
+  if [[ ! -f build/util/LASTCHANGE ]]; then
+    log "  writing build/util/LASTCHANGE"
+    {
+      echo "LASTCHANGE=tarball-${ver}"
+      echo "LASTCHANGE_YEAR=$(date +%Y)"
+    } > build/util/LASTCHANGE
   fi
 
-  # gclient runhooks shells out to `git diff ... -G "Subproject commit"`
-  # inside src/ to check for submodule pointer changes, even when the
-  # solution is declared `managed: False`. The tarball-extracted tree has
-  # no .git/, so git aborts ("Not a git repository") and gclient bails.
-  # Stub it with an empty `git init`: the diff call now produces empty
-  # output and exits 0 (only tracked files appear in `git diff`, and we
-  # add none). The actual hooks we need (clang, sysroot, rust, node) do
-  # not use git.
-  if [[ ! -d "${CHROMIUM_SRC}/.git" ]]; then
-    log "git init ${CHROMIUM_SRC} (stub to satisfy gclient's diff probe)"
-    git -C "${CHROMIUM_SRC}" init -q
-    git -C "${CHROMIUM_SRC}" config user.email "build@ghostium.local"
-    git -C "${CHROMIUM_SRC}" config user.name "ghostium-build"
+  if [[ ! -f gpu/config/gpu_lists_version.h ]]; then
+    log "  writing gpu/config/gpu_lists_version.h"
+    printf '#define GPU_LISTS_VERSION "tarball-%s"\n' "${ver}" \
+      > gpu/config/gpu_lists_version.h
   fi
 
-  # Some hooks (notably `lastchange`) shell out to git in src/. The -lite
-  # tarball ships a pre-generated LASTCHANGE file; if it is missing, write
-  # a synthetic one so the hook does not abort the run.
-  if [[ ! -f "${CHROMIUM_SRC}/build/util/LASTCHANGE" ]]; then
-    log "synthesizing LASTCHANGE (tarball is a non-git checkout)"
-    local ver
-    ver=$(tr -d '[:space:]' < "${GHOSTIUM_ROOT}/config/chromium_version")
-    cat > "${CHROMIUM_SRC}/build/util/LASTCHANGE" <<EOF
-LASTCHANGE=tarball-${ver}
-LASTCHANGE_YEAR=$(date +%Y)
-EOF
+  if [[ ! -f skia/ext/skia_commit_hash.h ]]; then
+    log "  writing skia/ext/skia_commit_hash.h"
+    printf '#define SKIA_COMMIT_HASH "tarball-%s"\n' "${ver}" \
+      > skia/ext/skia_commit_hash.h
   fi
 
-  cd "${CHROMIUM_ROOT}"
-  gclient runhooks
+  # ---- Toolchain downloads ----------------------------------------------
+  # clang
+  if [[ -f tools/clang/scripts/update.py ]]; then
+    log "  tools/clang/scripts/update.py"
+    python3 tools/clang/scripts/update.py
+  else
+    die "tools/clang/scripts/update.py not found; unexpected tarball layout"
+  fi
+
+  # sysroot (amd64, Linux only)
+  if [[ -f build/linux/sysroot_scripts/install-sysroot.py ]]; then
+    log "  build/linux/sysroot_scripts/install-sysroot.py --arch=amd64"
+    python3 build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
+  fi
+
+  # Rust toolchain (M115+)
+  if [[ -f tools/rust/update_rust.py ]]; then
+    log "  tools/rust/update_rust.py"
+    python3 tools/rust/update_rust.py
+  fi
+
+  # Node binaries
+  if [[ -x third_party/node/update_node_binaries ]]; then
+    log "  third_party/node/update_node_binaries"
+    third_party/node/update_node_binaries
+  elif [[ -f third_party/node/update_node_binaries ]]; then
+    log "  bash third_party/node/update_node_binaries"
+    bash third_party/node/update_node_binaries
+  fi
+
+  # NPM packages used by the build (mostly devtools).
+  if [[ -x third_party/node/update_npm_deps ]]; then
+    log "  third_party/node/update_npm_deps"
+    third_party/node/update_npm_deps || warn "update_npm_deps failed; build may need network later"
+  fi
+
+  # ---- Sanity checks: critical artifacts must be present ----------------
+  [[ -x third_party/llvm-build/Release+Asserts/bin/clang ]] \
+    || die "clang not at third_party/llvm-build/Release+Asserts/bin/clang after runhooks"
+
+  if ! ls -d build/linux/debian_*_amd64-sysroot >/dev/null 2>&1; then
+    warn "no Debian sysroot under build/linux/; some link steps may fail"
+  fi
+
+  log "[runhooks] toolchain in place"
 }
 
 stage_build_deps() {
