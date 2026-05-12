@@ -51,7 +51,7 @@ All Mulberry32-keyed noise is deterministic per profile + input.
 One command, on a fresh Ubuntu 22.04 (or 24.04) x86_64 host:
 
 ```bash
-git clone <this-repo> ghostium
+git clone https://github.com/jessejjohnson/uc-ghostium.git ghostium
 cd ghostium
 ./build.sh
 ```

@@ -4,7 +4,7 @@
 #
 # SSH into a fresh Ubuntu 22.04 (or 24.04) x86_64 host and run:
 #
-#     git clone <repo> ghostium && cd ghostium
+#     git clone https://github.com/jessejjohnson/uc-ghostium.git ghostium && cd ghostium
 #     ./build.sh
 #
 # The script self-wraps in a tmux session named "ghostium-build" so SSH
