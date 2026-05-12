@@ -125,9 +125,13 @@ done
 # Helpers
 # ----------------------------------------------------------------------------
 
-log()  { printf '\033[1;36m[bootstrap %s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*"; }
-warn() { printf '\033[1;33m[bootstrap %s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*" >&2; }
-die()  { printf '\033[1;31m[bootstrap %s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*" >&2; exit 1; }
+# The prefix tag identifies which phase / stage the message comes from.
+# The driver sets CURRENT_STAGE before invoking each stage_* function.
+CURRENT_STAGE="init"
+
+log()  { printf '\033[1;36m[%s %s]\033[0m %s\n' "${CURRENT_STAGE}" "$(date +%H:%M:%S)" "$*"; }
+warn() { printf '\033[1;33m[%s %s]\033[0m %s\n' "${CURRENT_STAGE}" "$(date +%H:%M:%S)" "$*" >&2; }
+die()  { printf '\033[1;31m[%s %s]\033[0m %s\n' "${CURRENT_STAGE}" "$(date +%H:%M:%S)" "$*" >&2; exit 1; }
 
 SUDO=""
 [[ $EUID -ne 0 ]] && SUDO="sudo"
@@ -173,7 +177,7 @@ if [[ -z "${TMUX:-}" && "${NO_TMUX}" != "1" ]]; then
   fi
   exec tmux new-session -s "${TMUX_SESSION}" \
     "GHOSTIUM_NO_TMUX=1 bash $(printf '%q' "$0")${quoted}; \
-     echo; echo '[bootstrap] build script finished. Press any key to close.'; read -n1"
+     echo; echo '[done] build script finished. Press any key to close.'; read -n1"
 fi
 
 # ----------------------------------------------------------------------------
@@ -194,6 +198,7 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 # ----------------------------------------------------------------------------
 
 preflight() {
+  CURRENT_STAGE="preflight"
   log "pre-flight checks"
 
   # OS check
@@ -241,7 +246,7 @@ preflight() {
 # ----------------------------------------------------------------------------
 
 stage_apt() {
-  log "[apt] installing host packages"
+  log "installing host packages"
   if ! command -v apt-get >/dev/null 2>&1; then
     warn "no apt-get; skipping (not ubuntu/debian)"
     return 0
@@ -257,7 +262,7 @@ stage_apt() {
 }
 
 stage_submodule() {
-  log "[submodule] syncing UC submodule"
+  log "syncing UC submodule"
   cd "${GHOSTIUM_ROOT}"
   if [[ ! -f .gitmodules ]]; then
     warn ".gitmodules missing; skipping"
@@ -269,7 +274,7 @@ stage_submodule() {
 }
 
 stage_download() {
-  log "[download] retrieving Chromium tarball (utils/downloads.py retrieve)"
+  log "retrieving Chromium tarball (utils/downloads.py retrieve)"
   cd "${UC_ROOT}"
   # downloads.py uses curl -fL -C - so re-running resumes a partial download.
   python3 utils/downloads.py retrieve \
@@ -278,7 +283,7 @@ stage_download() {
 }
 
 stage_unpack() {
-  log "[unpack] unpacking Chromium tarball into ${CHROMIUM_SRC}"
+  log "unpacking Chromium tarball into ${CHROMIUM_SRC}"
 
   # downloads.py unpack writes into the target path; it will fail if the
   # destination already contains the unpacked tree. We make it idempotent
@@ -308,7 +313,7 @@ move it aside or rm -rf it before re-running this stage."
 }
 
 stage_depot() {
-  log "[depot] cloning depot_tools to ${DEPOT_TOOLS_DIR}"
+  log "cloning depot_tools to ${DEPOT_TOOLS_DIR}"
   if [[ ! -d "${DEPOT_TOOLS_DIR}/.git" ]]; then
     mkdir -p "$(dirname "${DEPOT_TOOLS_DIR}")"
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "${DEPOT_TOOLS_DIR}"
@@ -323,7 +328,7 @@ stage_depot() {
 }
 
 stage_runhooks() {
-  log "[runhooks] downloading Chromium toolchain (clang, sysroot, rust, node)"
+  log "downloading Chromium toolchain (clang, sysroot, rust, node)"
   with_path
 
   # We do NOT use `gclient runhooks` here. gclient was built for git-
@@ -412,18 +417,18 @@ stage_runhooks() {
     warn "no Debian sysroot under build/linux/; some link steps may fail"
   fi
 
-  log "[runhooks] toolchain in place"
+  log "toolchain in place"
 }
 
 stage_build_deps() {
-  log "[build-deps] running src/build/install-build-deps.sh"
+  log "running src/build/install-build-deps.sh"
   local script="${CHROMIUM_SRC}/build/install-build-deps.sh"
   [[ -x "${script}" ]] || die "install-build-deps.sh missing or not executable: ${script}"
   ${SUDO} "${script}" --no-prompt
 }
 
 stage_prune() {
-  log "[prune] UC prune_binaries.py"
+  log "UC prune_binaries.py"
   local prune="${UC_ROOT}/utils/prune_binaries.py"
   [[ -f "${prune}" ]] || die "${prune} missing; run --only submodule first"
 
@@ -434,21 +439,21 @@ stage_prune() {
 }
 
 stage_overlay() {
-  log "[overlay] symlinking ghostium_src/overlay into Chromium src"
+  log "symlinking ghostium_src/overlay into Chromium src"
   CHROMIUM_SRC="${CHROMIUM_SRC}" \
     python3 "${GHOSTIUM_ROOT}/scripts/sync_overlay.py" \
       --chromium-src "${CHROMIUM_SRC}"
 }
 
 stage_patches() {
-  log "[patches] applying UC series + Ghostium series"
+  log "applying UC series + Ghostium series"
   CHROMIUM_SRC="${CHROMIUM_SRC}" \
     python3 "${GHOSTIUM_ROOT}/scripts/apply_patches.py" \
       --chromium-src "${CHROMIUM_SRC}"
 }
 
 stage_domsub() {
-  log "[domsub] UC domain_substitution.py apply"
+  log "UC domain_substitution.py apply"
   local domsub="${UC_ROOT}/utils/domain_substitution.py"
   [[ -f "${domsub}" ]] || die "${domsub} missing; run --only submodule first"
   python3 "${domsub}" apply \
@@ -459,7 +464,7 @@ stage_domsub() {
 }
 
 stage_gn() {
-  log "[gn] gn gen ${GN_OUT}"
+  log "gn gen ${GN_OUT}"
   with_path
 
   local ghostium_args="${GHOSTIUM_ROOT}/config/gn_args.gn"
@@ -478,11 +483,11 @@ stage_gn() {
   cd "${CHROMIUM_SRC}"
   gn gen "${GN_OUT}" --args="${combined}"
 
-  log "[gn] effective args.gn written to ${GN_OUT}/args.gn"
+  log "effective args.gn written to ${GN_OUT}/args.gn"
 }
 
 stage_build() {
-  log "[build] ninja -C ${GN_OUT} ${BUILD_TARGET}"
+  log "ninja -C ${GN_OUT} ${BUILD_TARGET}"
   with_path
   export CCACHE_DIR
   export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-20G}"
@@ -498,12 +503,12 @@ stage_build() {
     ninja -C "${GN_OUT}" -j"$(nproc)" "${BUILD_TARGET}"
   fi
 
-  log "[build] done"
+  log "done"
   ccache -s 2>/dev/null | head -10 || true
 }
 
 stage_test() {
-  log "[test] building + running overlay unit tests"
+  log "building + running overlay unit tests"
   with_path
   cd "${CHROMIUM_SRC}"
   if command -v autoninja >/dev/null 2>&1; then
@@ -581,10 +586,12 @@ log "================================================================"
 preflight
 
 for s in "${STAGES[@]}"; do
-  log ">>>>>>>>>> stage: ${s}"
+  CURRENT_STAGE="$s"
+  log "------------------------------ start"
   start=$(date +%s)
   run_stage "$s"
-  log "<<<<<<<<<< stage ${s} done in $(( $(date +%s) - start ))s"
+  log "------------------------------ done in $(( $(date +%s) - start ))s"
 done
 
+CURRENT_STAGE="done"
 log "all stages completed. binary: ${GN_OUT}/${BUILD_TARGET}"
